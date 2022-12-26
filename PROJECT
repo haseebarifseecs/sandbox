@@ -6,4 +6,23 @@ plugins:
   scorecard.sdk.operatorframework.io/v2: {}
 projectName: sandbox
 repo: github.com/haseebarifseecs/sandbox
+resources:
+- api:
+    crdVersion: v1
+    namespaced: true
+  controller: true
+  domain: stakator.io
+  group: stakator.io
+  kind: User
+  path: github.com/haseebarifseecs/sandbox/api/v1alpha1
+  version: v1alpha1
+- api:
+    crdVersion: v1
+    namespaced: true
+  controller: true
+  domain: stakator.io
+  group: stakator.io
+  kind: Sandbox
+  path: github.com/haseebarifseecs/sandbox/api/v1alpha1
+  version: v1alpha1
 version: "3"

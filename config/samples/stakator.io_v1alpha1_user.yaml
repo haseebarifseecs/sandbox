@@ -1,0 +1,16 @@
+apiVersion: stakator.io.stakator.io/v1alpha1
+kind: User
+metadata:
+  labels:
+    app.kubernetes.io/name: user
+    app.kubernetes.io/instance: user-sample
+    app.kubernetes.io/part-of: sandbox
+    app.kubernetes.io/managed-by: kustomize
+    app.kubernetes.io/created-by: sandbox
+  name: user-sample
+spec:
+  # TODO(user): Add fields here
+  name: Test
+  orgname: Test
+  deptname: Engineering
+  sandboxcount: 1
