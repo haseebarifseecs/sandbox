@@ -128,6 +128,8 @@ spec:
                   - type
                   type: object
                 type: array
+              name:
+                type: string
               sandboxcount:
                 type: integer
             type: object

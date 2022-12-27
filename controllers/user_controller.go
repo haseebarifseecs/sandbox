@@ -19,6 +19,7 @@ package controllers
 import (
 	"context"
 	"strconv"
+	"strings"
 
 	stakatoriov1alpha1 "github.com/haseebarifseecs/sandbox/api/v1alpha1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -63,32 +64,100 @@ func (r *UserReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.
 		log.Info("Some error has occured", err)
 		return ctrl.Result{}, err
 	}
+	// } else if err == nil && user.Status.SandboxCount != user.Spec.SandboxCount {
+	// 	log.Info("Update Request Received")
+	// 	if user.Spec.SandboxCount > user.Status.SandboxCount {
+	// 		for i := 1; i <= user.Spec.SandboxCount; i++ {
+	// 			username := user.Spec.Name
+	// 			sandboxName := "SB-" + username + "-" + strconv.Itoa(i)
+	// 			err = r.Create(ctx, &stakatoriov1alpha1.Sandbox{
+	// 				ObjectMeta: metav1.ObjectMeta{
+	// 					Name:      strings.ToLower(sandboxName),
+	// 					Namespace: user.Namespace,
+	// 				},
+	// 				Spec: stakatoriov1alpha1.SandboxSpec{
+	// 					Name: sandboxName,
+	// 					Type: "T1",
+	// 				},
+	// 			})
+	// 			if apierrors.IsAlreadyExists(err) || err == nil {
+	// 				// log.Error(err, "Error")
+	// 				// log.Info("Failed to create Sandbox Resource", err)
+	// 				// Update Status field
+	// 				user.Status.SandboxCount = i
+	// 				err = r.Status().Update(ctx, user)
+	// 				if err != nil {
+	// 					log.Info("Error Updating Count")
+	// 					return ctrl.Result{}, err
+	// 				}
+	// 				// return ctrl.Result{}, err
+	// 			} else {
+	// 				return ctrl.Result{}, err
+	// 			}
+
+	// 		}
+	// 	}
+	// }
+
 	count := user.Spec.SandboxCount
-	username := user.Spec.Name
-	sandboxName := "SB-" + username + "-" + strconv.Itoa(count)
-	found := &stakatoriov1alpha1.Sandbox{}
-	err = r.Get(ctx, types.NamespacedName{Name: user.Name, Namespace: user.Namespace}, found)
-	if err != nil {
-		if apierrors.IsNotFound(err) {
-			for i := 0; i < count; i++ {
-				err = r.Create(ctx, &stakatoriov1alpha1.Sandbox{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:      user.Name,
-						Namespace: user.Namespace,
-					},
-					Spec: stakatoriov1alpha1.SandboxSpec{
-						Name: sandboxName,
-						Type: "T1",
-					},
-				})
-				if err != nil {
-					log.Error(err, "Error")
-					// log.Info("Failed to create Sandbox Resource", err)
-					return ctrl.Result{}, err
-				}
-			}
+	// found := &stakatoriov1alpha1.Sandbox{}
+	for i := 1; i <= count; i++ {
+		username := user.Spec.Name
+		sandboxName := "SB-" + username + "-" + strconv.Itoa(i)
+		sandboxObj := &stakatoriov1alpha1.Sandbox{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      strings.ToLower(sandboxName),
+				Namespace: user.Namespace,
+			},
+			Spec: stakatoriov1alpha1.SandboxSpec{
+				Name: sandboxName,
+				Type: "T1",
+			},
+		}
+		_ = ctrl.SetControllerReference(user, sandboxObj, r.Scheme)
+
+		err = r.Create(ctx, sandboxObj)
+		if apierrors.IsAlreadyExists(err) {
+			_ = r.Get(ctx, types.NamespacedName{Name: strings.ToLower(sandboxName), Namespace: user.Namespace}, sandboxObj)
+			_ = ctrl.SetControllerReference(user, sandboxObj, r.Scheme)
+			_ = r.Update(ctx, sandboxObj)
 		}
 	}
+	// if apierrors.IsAlreadyExists(err){
+	// 	_ = ctrl.SetControllerReference(user, found, r.Scheme)
+	// }else{
+
+	// }
+	// err = r.Get(ctx, types.NamespacedName{Name: user.Name, Namespace: user.Namespace}, found)
+	// if err != nil {
+
+	// 	if apierrors.IsNotFound(err) {
+	// 		for i := 1; i <= count; i++ {
+	// 			err = r.Create(ctx, &stakatoriov1alpha1.Sandbox{
+	// 				ObjectMeta: metav1.ObjectMeta{
+	// 					Name:      user.Name,
+	// 					Namespace: user.Namespace,
+	// 				},
+	// 				Spec: stakatoriov1alpha1.SandboxSpec{
+	// 					Name: sandboxName,
+	// 					Type: "T1",
+	// 				},
+	// 			})
+	// 			if err != nil {
+	// 				log.Error(err, "Error")
+	// 				// log.Info("Failed to create Sandbox Resource", err)
+	// 				return ctrl.Result{}, err
+	// 			}
+	// 			// Update Status field
+	// 			user.Status.SandboxCount = i
+	// 			err = r.Status().Update(ctx, user)
+	// 			if err != nil {
+	// 				log.Info("Error Updating Count")
+	// 				return ctrl.Result{}, err
+	// 			}
+	// 		}
+	// 	}
+	// }
 
 	log.Info("HELLO \n")
 	log.Info("SandBox Count \t" + strconv.Itoa(user.Status.SandboxCount))
@@ -97,7 +166,8 @@ func (r *UserReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.
 		user.Status.SandboxCount = 1
 		err = r.Status().Update(ctx, user)
 		if err != nil {
-			log.Info("Failed to update", err)
+			log.Info("Failed to update")
+			log.Error(err, "Error")
 			return ctrl.Result{}, err
 		}
 	}
@@ -110,5 +180,6 @@ func (r *UserReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.
 func (r *UserReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&stakatoriov1alpha1.User{}).
+		Owns(&stakatoriov1alpha1.Sandbox{}).
 		Complete(r)
 }

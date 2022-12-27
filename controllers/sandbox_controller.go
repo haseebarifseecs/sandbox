@@ -25,8 +25,10 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 )
 
@@ -35,6 +37,8 @@ type SandboxReconciler struct {
 	client.Client
 	Scheme *runtime.Scheme
 }
+
+const sandboxFinalizer = "stakator.io.stakator.io/finalizer"
 
 //+kubebuilder:rbac:groups=stakator.io.stakator.io,resources=sandboxes,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups=stakator.io.stakator.io,resources=sandboxes/status,verbs=get;update;patch
@@ -50,6 +54,7 @@ type SandboxReconciler struct {
 // For more details, check Reconcile and its Result here:
 // - https://pkg.go.dev/sigs.k8s.io/controller-runtime@v0.13.0/pkg/reconcile
 func (r *SandboxReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
+
 	log := log.FromContext(ctx)
 	sandbox := &stakatoriov1alpha1.Sandbox{}
 	err := r.Get(ctx, req.NamespacedName, sandbox)
@@ -61,27 +66,79 @@ func (r *SandboxReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 
 		return ctrl.Result{}, err
 	}
+	if !controllerutil.ContainsFinalizer(sandbox, sandboxFinalizer) {
+		log.Info("Adding Finalizer for Memcached")
+		if ok := controllerutil.AddFinalizer(sandbox, sandboxFinalizer); !ok {
+			log.Error(err, "Failed to add finalizer into the custom resource")
+			return ctrl.Result{Requeue: true}, nil
+		}
 
-	name := sandbox.Spec.Name
-	name = strings.ReplaceAll("-", "", name)
-	log.Info(name)
-	if name != "" {
-		err = r.Create(ctx, &apicorev1.Namespace{
-			ObjectMeta: metav1.ObjectMeta{
-				Name: name,
-			},
-		})
-		if err != nil {
+		if err = r.Update(ctx, sandbox); err != nil {
+			log.Error(err, "Failed to update custom resource to add finalizer")
 			return ctrl.Result{}, err
 		}
 	}
 
+	if sandbox.GetDeletionTimestamp() != nil {
+		if controllerutil.ContainsFinalizer(sandbox, sandboxFinalizer) {
+			log.Info("Received Deletion Timestamp")
+			namespaceName := strings.ToLower(sandbox.Spec.Name)
+			namespace := &apicorev1.Namespace{}
+			err = r.Get(ctx, types.NamespacedName{Name: namespaceName}, namespace)
+			if !apierrors.IsNotFound(err) {
+				err = r.Delete(ctx, namespace)
+				if err != nil {
+					log.Info("Error deleting Namespace")
+				} else {
+					ok := controllerutil.RemoveFinalizer(sandbox, sandboxFinalizer)
+					if !ok {
+						log.Info("Error removing finalizer")
+					}
+				}
+			} else {
+				ok := controllerutil.RemoveFinalizer(sandbox, sandboxFinalizer)
+				if !ok {
+					log.Info("Error removing finalizer")
+				}
+			}
+
+		}
+	}
+	name := sandbox.Spec.Name
+	name = strings.ToLower(name)
+	log.Info(name)
+	if name != "" {
+		namespace := &apicorev1.Namespace{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: name,
+			},
+		}
+		// if err != nil {
+		// 	return ctrl.Result{}, nil
+		// }
+		err = r.Create(ctx, namespace)
+
+		if apierrors.IsAlreadyExists(err) {
+			log.Info("Namespace Exists for the user")
+			err = r.Get(ctx, types.NamespacedName{Name: name}, namespace)
+			err = ctrl.SetControllerReference(sandbox, namespace, r.Scheme)
+			err = r.Update(ctx, namespace)
+			return ctrl.Result{}, nil
+		}
+		if err != nil {
+			return ctrl.Result{}, err
+		}
+
+	}
+
 	return ctrl.Result{}, nil
+
 }
 
 // SetupWithManager sets up the controller with the Manager.
 func (r *SandboxReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&stakatoriov1alpha1.Sandbox{}).
+		Owns(&apicorev1.Namespace{}).
 		Complete(r)
 }

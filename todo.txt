@@ -1,0 +1,4 @@
+Add finalizer to Sandbox for deletion of namespaces.
+Prevent recreation of Sandbox Resource on deletion.
+
+Controller References

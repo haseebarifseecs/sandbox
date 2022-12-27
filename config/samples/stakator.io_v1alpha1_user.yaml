@@ -13,4 +13,4 @@ spec:
   name: Test
   orgname: Test
   deptname: Engineering
-  sandboxcount: 1
+  sandboxcount: 4
