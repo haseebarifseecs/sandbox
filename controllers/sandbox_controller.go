@@ -19,6 +19,7 @@ package controllers
 import (
 	"context"
 	"strings"
+	"time"
 
 	stakatoriov1alpha1 "github.com/haseebarifseecs/sandbox/api/v1alpha1"
 	apicorev1 "k8s.io/api/core/v1"
@@ -102,6 +103,7 @@ func (r *SandboxReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 				}
 			}
 			_ = r.Update(ctx, sandbox)
+			return ctrl.Result{}, nil
 
 		}
 	}
@@ -121,10 +123,10 @@ func (r *SandboxReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 
 		if apierrors.IsAlreadyExists(err) {
 			log.Info("Namespace Exists for the user")
-			err = r.Get(ctx, types.NamespacedName{Name: name}, namespace)
-			err = ctrl.SetControllerReference(sandbox, namespace, r.Scheme)
-			err = r.Update(ctx, namespace)
-			return ctrl.Result{}, nil
+			// _ = r.Get(ctx, types.NamespacedName{Name: name}, namespace)
+			// _ = ctrl.SetControllerReference(sandbox, namespace, r.Scheme)
+			// _ = r.Update(ctx, namespace)
+			return ctrl.Result{RequeueAfter: time.Second * 5, Requeue: true}, nil
 		}
 		if err != nil {
 			return ctrl.Result{}, err
