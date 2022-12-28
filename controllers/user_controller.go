@@ -37,6 +37,8 @@ type UserReconciler struct {
 	Scheme *runtime.Scheme
 }
 
+// var maxVal = 5
+
 //+kubebuilder:rbac:groups=stakator.io.stakator.io,resources=users,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups=stakator.io.stakator.io,resources=users/status,verbs=get;update;patch
 //+kubebuilder:rbac:groups=stakator.io.stakator.io,resources=users/finalizers,verbs=update
@@ -98,8 +100,60 @@ func (r *UserReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.
 	// 		}
 	// 	}
 	// }
-
 	count := user.Spec.SandboxCount
+	actual := user.Status.SandboxCount
+	if actual > count {
+		log.Info("Inside Update Process")
+		for i := actual; i > count; i-- {
+			username := user.Spec.Name
+			sandboxName := "SB-" + username + "-" + strconv.Itoa(i)
+			sandboxObj := &stakatoriov1alpha1.Sandbox{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      strings.ToLower(sandboxName),
+					Namespace: user.Namespace,
+				},
+				Spec: stakatoriov1alpha1.SandboxSpec{
+					Name: sandboxName,
+					Type: "T1",
+				},
+			}
+			err := r.Get(ctx, types.NamespacedName{Name: strings.ToLower(sandboxName), Namespace: user.Namespace}, sandboxObj)
+			if err == nil {
+				err = r.Delete(ctx, sandboxObj)
+				if err == nil {
+					log.Info("Sandbox Resource deleted")
+					user.Status.SandboxCount = i
+					_ = r.Status().Update(ctx, user)
+				}
+			}
+		}
+	}
+	// diff := maxVal - count
+	// if diff > 0 {
+	// 	for i := maxVal; i > count; i++ {
+	// 		username := user.Spec.Name
+	// 		sandboxName := "SB-" + username + "-" + strconv.Itoa(i)
+	// 		sandboxObj := &stakatoriov1alpha1.Sandbox{
+	// 			ObjectMeta: metav1.ObjectMeta{
+	// 				Name:      strings.ToLower(sandboxName),
+	// 				Namespace: user.Namespace,
+	// 			},
+	// 			Spec: stakatoriov1alpha1.SandboxSpec{
+	// 				Name: sandboxName,
+	// 				Type: "T1",
+	// 			},
+	// 		}
+	// 		err = r.Get(ctx, types.NamespacedName{Name: strings.ToLower(sandboxName), Namespace: user.Namespace}, sandboxObj)
+	// 		if apierrors.IsNotFound(err) {
+	// 			log.Info("Sandbox Doesn't exist")
+	// 		} else {
+	// 			err = r.Delete(ctx, sandboxObj)
+	// 			if err != nil {
+	// 				log.Info("Error Deleting Sandbox")
+	// 			}
+	// 		}
+	// 	}
+	// }
 	// found := &stakatoriov1alpha1.Sandbox{}
 	for i := 1; i <= count; i++ {
 		username := user.Spec.Name
@@ -121,6 +175,12 @@ func (r *UserReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.
 			_ = r.Get(ctx, types.NamespacedName{Name: strings.ToLower(sandboxName), Namespace: user.Namespace}, sandboxObj)
 			_ = ctrl.SetControllerReference(user, sandboxObj, r.Scheme)
 			_ = r.Update(ctx, sandboxObj)
+		} else if err == nil {
+			user.Status.SandboxCount = i
+			err = r.Status().Update(ctx, user)
+			if err != nil {
+				log.Info("Error updating Status of User")
+			}
 		}
 	}
 	// if apierrors.IsAlreadyExists(err){
@@ -159,19 +219,19 @@ func (r *UserReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.
 	// 	}
 	// }
 
-	log.Info("HELLO \n")
-	log.Info("SandBox Count \t" + strconv.Itoa(user.Status.SandboxCount))
-	if user.Status.SandboxCount == 0 {
-		log.Info("Inside Condition Met:")
-		user.Status.SandboxCount = 1
-		err = r.Status().Update(ctx, user)
-		if err != nil {
-			log.Info("Failed to update")
-			log.Error(err, "Error")
-			return ctrl.Result{}, err
-		}
-	}
-	log.Info("Sandbox Count \t" + strconv.Itoa(user.Status.SandboxCount))
+	// log.Info("HELLO \n")
+	// log.Info("SandBox Count \t" + strconv.Itoa(user.Status.SandboxCount))
+	// if user.Status.SandboxCount == 0 {
+	// 	log.Info("Inside Condition Met:")
+	// 	user.Status.SandboxCount = 1
+	// 	err = r.Status().Update(ctx, user)
+	// 	if err != nil {
+	// 		log.Info("Failed to update")
+	// 		log.Error(err, "Error")
+	// 		return ctrl.Result{}, err
+	// 	}
+	// }
+	// log.Info("Sandbox Count \t" + strconv.Itoa(user.Status.SandboxCount))
 
 	return ctrl.Result{}, nil
 }

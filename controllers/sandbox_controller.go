@@ -101,6 +101,7 @@ func (r *SandboxReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 					log.Info("Error removing finalizer")
 				}
 			}
+			_ = r.Update(ctx, sandbox)
 
 		}
 	}
